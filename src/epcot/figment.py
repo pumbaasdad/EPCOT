@@ -46,7 +46,7 @@ class Figment(ABC):
         Returns:
             A list of Directory objects.
         """
-        directories = self.figment_config.get('directories', [])
+        directories = self.figment_config.get("directories", [])
         return [Directory(d) for d in directories]
 
     def files(self) -> List[Task]:
@@ -55,7 +55,7 @@ class Figment(ABC):
         Returns:
             A list of Task objects.
         """
-        files = self.figment_config.get('files', [])
+        files = self.figment_config.get("files", [])
         return [Task(f) for f in files]
 
     def deb_repos(self) -> List[Task]:
@@ -64,7 +64,7 @@ class Figment(ABC):
         Returns:
             A list of Task objects.
         """
-        deb_repos = self.figment_config.get('deb_repos', [])
+        deb_repos = self.figment_config.get("deb_repos", [])
         return [Task(d) for d in deb_repos]
 
     def apt_keys(self) -> List[Task]:
@@ -73,7 +73,7 @@ class Figment(ABC):
         Returns:
             A list of Task objects.
         """
-        apt_keys = self.figment_config.get('apt_keys', [])
+        apt_keys = self.figment_config.get("apt_keys", [])
         return [Task(a) for a in apt_keys]
 
     def packages(self) -> List[str]:
@@ -82,7 +82,7 @@ class Figment(ABC):
         Returns:
             A list of package names.
         """
-        return self.figment_config.get('packages', [])
+        return self.figment_config.get("packages", [])  # type: ignore
 
     def services(self) -> List[Service]:
         """Get the services for this figment.
@@ -90,8 +90,7 @@ class Figment(ABC):
         Returns:
             A list of Service objects.
         """
-        services = []
-        return self.figment_config.get('services', [])
+        return self.figment_config.get("services", [])  # type: ignore
 
     def pip_modules(self) -> List[PipModule]:
         """Get the pip modules for this figment.
@@ -99,7 +98,7 @@ class Figment(ABC):
         Returns:
             A list of PipModule objects.
         """
-        pip_modules = self.figment_config.get('pip_modules', [])
+        pip_modules = self.figment_config.get("pip_modules", [])
         return [PipModule(p) for p in pip_modules]
 
     def users(self) -> List[str]:
@@ -108,7 +107,7 @@ class Figment(ABC):
         Returns:
             A list of user names.
         """
-        return self.figment_config.get('users', [])
+        return self.figment_config.get("users", [])  # type: ignore
 
     def groups(self) -> List[Group]:
         """Get the groups for this figment.
@@ -116,7 +115,7 @@ class Figment(ABC):
         Returns:
             A list of Group objects.
         """
-        groups = self.figment_config.get('groups', [])
+        groups = self.figment_config.get("groups", [])
         return [Group(g) for g in groups]
 
     def apt_ppas(self) -> List[Task]:
@@ -125,5 +124,5 @@ class Figment(ABC):
         Returns:
             A list of Task objects.
         """
-        apt_ppas = self.figment_config.get('apt_ppas', [])
+        apt_ppas = self.figment_config.get("apt_ppas", [])
         return [Task(a) for a in apt_ppas]

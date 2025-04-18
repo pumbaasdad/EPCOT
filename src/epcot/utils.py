@@ -1,7 +1,6 @@
 """Utility functions for EPCOT."""
 
 import re
-from typing import Optional
 
 
 def pascal_to_kebab(pascal_case: str) -> str:
@@ -28,9 +27,13 @@ def pascal_to_kebab(pascal_case: str) -> str:
     # Handle special cases for acronyms
     # First, handle consecutive capital letters (acronyms)
     # Replace patterns like "IP" with "Ip" to treat them as a single word
-    processed = re.sub(r'([A-Z])([A-Z]+)(?=[A-Z][a-z]|$)', lambda m: m.group(1) + m.group(2).lower(), pascal_case)
+    processed = re.sub(
+        r"([A-Z])([A-Z]+)(?=[A-Z][a-z]|$)",
+        lambda m: m.group(1) + m.group(2).lower(),
+        pascal_case,
+    )
 
     # Then insert a hyphen before each capital letter (except the first one)
     # and convert to lowercase
-    kebab_case = re.sub(r'(?<!^)(?=[A-Z])', '-', processed).lower()
+    kebab_case = re.sub(r"(?<!^)(?=[A-Z])", "-", processed).lower()
     return kebab_case

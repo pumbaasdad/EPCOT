@@ -8,7 +8,7 @@ from epcot.utils import pascal_to_kebab
 class TestUtils(unittest.TestCase):
     """Tests for the utils module."""
 
-    def test_pascal_to_kebab(self):
+    def test_pascal_to_kebab(self) -> None:
         """Test the pascal_to_kebab function."""
         test_cases = [
             ("MediaServer", "media-server"),
