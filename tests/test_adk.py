@@ -3,7 +3,7 @@ Tests for the ADK module.
 """
 
 import pytest
-from epcot.adk import Task, Play, Playbook, TaskResult, Handler
+from epcot.adk import Task, Play, Playbook, TaskResult, Handler, to_yaml, to_yaml_file
 
 
 def test_task_creation():
@@ -546,3 +546,174 @@ def test_playbook_run():
 
     assert isinstance(result, TaskResult)
     assert result.success is True
+
+
+def test_task_to_yaml():
+    """Test that a Task can be converted to YAML."""
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+        when="ansible_distribution == 'Ubuntu'",
+        register="nginx_install",
+        tags=["web", "nginx"],
+    )
+
+    yaml_str = task.to_yaml()
+
+    assert isinstance(yaml_str, str)
+    assert "name: Install nginx" in yaml_str
+    assert "apt:" in yaml_str
+    assert "name: nginx" in yaml_str
+    assert "state: present" in yaml_str
+    assert "when: ansible_distribution == 'Ubuntu'" in yaml_str
+    assert "register: nginx_install" in yaml_str
+    assert "tags:" in yaml_str
+    assert "- web" in yaml_str
+    assert "- nginx" in yaml_str
+
+
+def test_playbook_to_yaml():
+    """Test that a Playbook can be converted to YAML."""
+    playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+        become=True,
+        vars={"nginx_version": "1.18.0"},
+    )
+
+    task1 = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    task2 = Task(
+        name="Configure nginx",
+        module="template",
+        args={"src": "nginx.conf.j2", "dest": "/etc/nginx/nginx.conf"},
+    )
+
+    handler = Handler(
+        name="Restart nginx",
+        module="service",
+        args={"name": "nginx", "state": "restarted"},
+    )
+
+    playbook.add_task(task1)
+    playbook.add_task(task2)
+    playbook.add_handler(handler)
+    playbook.add_dependency("Configure nginx", "Install nginx")
+
+    yaml_str = playbook.to_yaml()
+
+    assert isinstance(yaml_str, str)
+    assert "name: Setup Web Server" in yaml_str
+    assert "hosts: web_servers" in yaml_str
+    assert "become: true" in yaml_str
+    assert "vars:" in yaml_str
+    assert "nginx_version: 1.18.0" in yaml_str
+    assert "tasks:" in yaml_str
+    assert "name: Install nginx" in yaml_str
+    assert "apt:" in yaml_str
+    assert "name: nginx" in yaml_str
+    assert "state: present" in yaml_str
+    assert "name: Configure nginx" in yaml_str
+    assert "template:" in yaml_str
+    assert "src: nginx.conf.j2" in yaml_str
+    assert "dest: /etc/nginx/nginx.conf" in yaml_str
+    assert "handlers:" in yaml_str
+    assert "name: Restart nginx" in yaml_str
+    assert "service:" in yaml_str
+    assert "name: nginx" in yaml_str
+    assert "state: restarted" in yaml_str
+
+
+def test_to_yaml_function():
+    """Test that the to_yaml function works correctly."""
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    yaml_str = to_yaml(task)
+
+    assert isinstance(yaml_str, str)
+    assert "name: Install nginx" in yaml_str
+    assert "apt:" in yaml_str
+    assert "name: nginx" in yaml_str
+    assert "state: present" in yaml_str
+
+    # Test with a dictionary
+    dict_obj = {"name": "Test", "value": 123}
+    yaml_str = to_yaml(dict_obj)
+
+    assert isinstance(yaml_str, str)
+    assert "name: Test" in yaml_str
+    assert "value: 123" in yaml_str
+
+    # Test with a list
+    list_obj = [{"name": "Item 1"}, {"name": "Item 2"}]
+    yaml_str = to_yaml(list_obj)
+
+    assert isinstance(yaml_str, str)
+    assert "- name: Item 1" in yaml_str
+    assert "- name: Item 2" in yaml_str
+
+    # Test with an object that doesn't have a to_yaml method
+    with pytest.raises(AttributeError):
+        to_yaml(123)
+
+
+def test_to_yaml_file(tmp_path):
+    """Test that the to_yaml_file function works correctly."""
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    file_path = tmp_path / "task.yaml"
+    to_yaml_file(task, file_path)
+
+    assert file_path.exists()
+    with open(file_path, "r") as f:
+        content = f.read()
+
+    assert "name: Install nginx" in content
+    assert "apt:" in content
+    assert "name: nginx" in content
+    assert "state: present" in content
+
+    # Test with a dictionary
+    dict_obj = {"name": "Test", "value": 123}
+    file_path = tmp_path / "dict.yaml"
+    to_yaml_file(dict_obj, file_path)
+
+    assert file_path.exists()
+    with open(file_path, "r") as f:
+        content = f.read()
+
+    assert "name: Test" in content
+    assert "value: 123" in content
+
+    # Test with a list
+    list_obj = [{"name": "Item 1"}, {"name": "Item 2"}]
+    file_path = tmp_path / "list.yaml"
+    to_yaml_file(list_obj, file_path)
+
+    assert file_path.exists()
+    with open(file_path, "r") as f:
+        content = f.read()
+
+    assert "- name: Item 1" in content
+    assert "- name: Item 2" in content
+
+    # Test with an object that doesn't have a to_yaml method
+    with pytest.raises(AttributeError):
+        to_yaml_file(123, tmp_path / "invalid.yaml")
+
+    # Test with an invalid file path
+    with pytest.raises(IOError):
+        to_yaml_file(task, "/invalid/path/task.yaml")

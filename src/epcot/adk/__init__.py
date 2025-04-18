@@ -4,10 +4,13 @@ Ansible Development Kit (ADK) module.
 This module provides a programmatic interface for creating and managing Ansible tasks and playbooks.
 """
 
-from typing import Dict, List, Optional, Union, Any, Set
+from typing import Dict, List, Optional, Union, Any, Set, TextIO, BinaryIO
 from collections import defaultdict
+import os
+import yaml
+from pathlib import Path
 
-__all__ = ["Task", "Play", "Playbook", "TaskResult", "Handler"]
+__all__ = ["Task", "Play", "Playbook", "TaskResult", "Handler", "to_yaml", "to_yaml_file"]
 
 
 class Task:
@@ -43,6 +46,74 @@ class Task:
         self.when = when
         self.register = register
         self.tags = tags or []
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert the task to a dictionary representation.
+
+        Returns:
+            A dictionary representation of the task
+        """
+        task_dict = {
+            "name": self.name,
+            self.module: self.args,
+        }
+
+        if self.when:
+            task_dict["when"] = self.when
+
+        if self.register:
+            task_dict["register"] = self.register
+
+        if self.tags:
+            task_dict["tags"] = self.tags
+
+        return task_dict
+
+    def to_yaml(self) -> str:
+        """
+        Convert the task to a YAML string.
+
+        Returns:
+            A YAML string representation of the task
+
+        Raises:
+            yaml.YAMLError: If the task cannot be converted to YAML
+        """
+        task_dict = self.to_dict()
+        try:
+            return yaml.dump([task_dict], default_flow_style=False)
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Failed to convert task '{self.name}' to YAML: {e}")
+
+    def validate(self) -> List[str]:
+        """
+        Validate the task.
+
+        Returns:
+            A list of validation errors, or an empty list if the task is valid
+        """
+        errors = []
+
+        if not self.name:
+            errors.append("Task must have a name")
+
+        if not self.module:
+            errors.append("Task must have a module")
+
+        if not isinstance(self.args, dict):
+            errors.append("Task arguments must be a dictionary")
+
+        return errors
+
+    def is_valid(self) -> bool:
+        """
+        Check if the task is valid.
+
+        Returns:
+            True if the task is valid, False otherwise
+        """
+        return len(self.validate()) == 0
 
 
 class Handler(Task):
@@ -502,6 +573,59 @@ class Playbook:
         # This would be implemented to actually run the playbook
         return TaskResult(success=True)
 
+    def to_yaml(self) -> str:
+        """
+        Convert the playbook to a YAML string.
+
+        Returns:
+            A YAML string representation of the playbook
+
+        Raises:
+            yaml.YAMLError: If the playbook cannot be converted to YAML
+        """
+        playbook_dict = self.to_dict()
+        try:
+            return yaml.dump(playbook_dict, default_flow_style=False)
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Failed to convert playbook '{self.name}' to YAML: {e}")
+
+    def validate_yaml(self) -> List[str]:
+        """
+        Validate the playbook for YAML conversion.
+
+        Returns:
+            A list of validation errors, or an empty list if the playbook is valid for YAML conversion
+        """
+        errors = self.validate()
+
+        # Additional validation for YAML conversion
+        for play in self.plays:
+            for task in play.tasks:
+                task_errors = task.validate()
+                if task_errors:
+                    errors.append(f"Task '{task.name}' is invalid: {', '.join(task_errors)}")
+
+            for handler in play.handlers:
+                handler_errors = handler.validate()
+                if handler_errors:
+                    errors.append(f"Handler '{handler.name}' is invalid: {', '.join(handler_errors)}")
+
+        for handler in self.handlers:
+            handler_errors = handler.validate()
+            if handler_errors:
+                errors.append(f"Handler '{handler.name}' is invalid: {', '.join(handler_errors)}")
+
+        return errors
+
+    def is_valid_yaml(self) -> bool:
+        """
+        Check if the playbook is valid for YAML conversion.
+
+        Returns:
+            True if the playbook is valid for YAML conversion, False otherwise
+        """
+        return len(self.validate_yaml()) == 0
+
 
 class Handler(Task):
     """
@@ -666,3 +790,56 @@ class TaskResult:
         self.changed = changed
         self.error = error
         self.output = output or {}
+
+
+def to_yaml(obj: Any) -> str:
+    """
+    Convert an object to a YAML string.
+
+    Args:
+        obj: The object to convert
+
+    Returns:
+        A YAML string representation of the object
+
+    Raises:
+        AttributeError: If the object does not have a to_yaml method
+        yaml.YAMLError: If the object cannot be converted to YAML
+    """
+    if hasattr(obj, "to_yaml"):
+        return obj.to_yaml()
+    elif isinstance(obj, dict):
+        try:
+            return yaml.dump(obj, default_flow_style=False)
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Failed to convert dictionary to YAML: {e}")
+    elif isinstance(obj, list):
+        try:
+            return yaml.dump(obj, default_flow_style=False)
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Failed to convert list to YAML: {e}")
+    else:
+        raise AttributeError(f"Object of type {type(obj).__name__} does not have a to_yaml method")
+
+
+def to_yaml_file(obj: Any, file_path: Union[str, Path], mode: str = "w") -> None:
+    """
+    Write an object to a YAML file.
+
+    Args:
+        obj: The object to write
+        file_path: The path to the file to write to
+        mode: The mode to open the file in (default: "w")
+
+    Raises:
+        AttributeError: If the object does not have a to_yaml method
+        yaml.YAMLError: If the object cannot be converted to YAML
+        IOError: If the file cannot be written to
+    """
+    yaml_str = to_yaml(obj)
+
+    try:
+        with open(file_path, mode) as f:
+            f.write(yaml_str)
+    except IOError as e:
+        raise IOError(f"Failed to write YAML to file '{file_path}': {e}")
