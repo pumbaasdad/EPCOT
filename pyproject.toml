@@ -7,8 +7,12 @@ readme = "README.md"
 license = "MIT"
 packages = [{include = "epcot", from = "src"}]
 
+[tool.poetry.scripts]
+epcot = "epcot.cli:main"
+
 [tool.poetry.dependencies]
 python = "==3.12.3"
+pyyaml = "^6.0.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.1.1"
