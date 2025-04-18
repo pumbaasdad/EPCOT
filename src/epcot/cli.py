@@ -85,11 +85,12 @@ def get_figment_class(name: str) -> type:
         TypeError: If the figment class does not inherit from Figment.
     """
     pascal_name = to_pascal_case(name)
+    snake_name = name.replace("-", "_")
 
     try:
-        module = importlib.import_module(f"epcot.figments.{name}")
+        module = importlib.import_module(f"epcot.figments.{snake_name}")
     except ImportError:
-        raise ImportError(f"Could not import figment module: epcot.figments.{name}")
+        raise ImportError(f"Could not import figment module: epcot.figments.{snake_name}")
 
     try:
         figment_class = getattr(module, pascal_name)

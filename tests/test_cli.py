@@ -83,7 +83,7 @@ def test_get_figment_class_success(mock_import: MagicMock) -> None:
 
     figment_class = get_figment_class("test-figment")
     assert figment_class == MockFigment
-    mock_import.assert_called_once_with("epcot.figments.test-figment")
+    mock_import.assert_called_once_with("epcot.figments.test_figment")
 
 
 @patch("importlib.import_module")
