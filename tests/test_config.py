@@ -156,3 +156,17 @@ def test_process_template_values_edge_cases() -> None:
     config4 = {"key": "{{ $INPUT.value }}"}
     processed4 = process_template_values(config4, "test-with-hyphens")
     assert processed4["key"] == "{{ __test_with_hyphens__input__value }}"
+
+    # Test with non-$ values
+    config5 = {"key": "{{ some_value }}"}
+    with pytest.raises(ValueError) as excinfo:
+        process_template_values(config5, "test-figment")
+    assert "Invalid template variable" in str(excinfo.value)
+    assert "Only '$INPUT.' and '$VAR.' prefixes are allowed" in str(excinfo.value)
+
+    # Test with mixed $ and non-$ values
+    config6 = {"key": "prefix {{ some_value }} middle {{ $INPUT.value }} suffix"}
+    with pytest.raises(ValueError) as excinfo:
+        process_template_values(config6, "test-figment")
+    assert "Invalid template variable" in str(excinfo.value)
+    assert "Only '$INPUT.' and '$VAR.' prefixes are allowed" in str(excinfo.value)

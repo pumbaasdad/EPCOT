@@ -56,8 +56,10 @@ def process_template_values(
     """Process template values in the configuration.
 
     Recursively checks all values in the configuration. If a value is a string
-    containing "{{ }}", it checks if it begins with "$INPUT." or "$VAR." and
-    replaces it with the appropriate pattern. If it doesn't, it raises an error.
+    containing "{{ }}", it processes it as follows:
+    - If it begins with "$INPUT.", it replaces it with "__<figment_name>__input__...".
+    - If it begins with "$VAR.", it replaces it with "__<figment_name>__var__...".
+    - If it begins with any other prefix, it raises an error.
 
     Args:
         config: The configuration to process.
@@ -72,8 +74,8 @@ def process_template_values(
     # Replace hyphens with underscores in figment name
     safe_figment_name = figment_name.replace("-", "_")
 
-    # Regular expression to match {{ $INPUT.xxx }} or {{ $VAR.xxx }}
-    template_pattern = re.compile(r"\{\{\s*(\$[A-Za-z0-9_.-]+)\s*\}\}")
+    # Regular expression to match any value within {{ }}
+    template_pattern = re.compile(r"\{\{\s*([A-Za-z0-9_.$-]+)\s*\}\}")
 
     if isinstance(config, dict):
         # Process dictionary values
@@ -96,7 +98,7 @@ def process_template_values(
                     "{{ __" + safe_figment_name + "__var__" + template_var[5:] + " }}"
                 )
             else:
-                # Raise error for other template variables
+                # Raise error for any other template variables
                 raise ValueError(
                     f"Invalid template variable '{template_var}' "
                     f"in figment '{figment_name}'. "
