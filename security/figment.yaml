@@ -1,0 +1,21 @@
+apt_ppas:
+  - ppa: yubico/stable
+
+packages:
+  - libpam-u2f
+  - openssh-server
+  - scdaemon
+
+services:
+  - sshd
+
+directories:
+  - path: /etc/pam.d
+  - path: /etc/ssh
+
+files:
+  - src: security/templates/pam.login.j2
+    dest: /etc/pam.d/login
+  - src: security/files/sshd_config
+    dest: /etc/ssh/sshd_config
+    notify: Restart sshd

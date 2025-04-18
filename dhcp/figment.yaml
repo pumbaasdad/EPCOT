@@ -1,0 +1,32 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}"
+    volume:
+      name: "{{ $INPUT.config_volume_name }}"
+
+files:
+  - src: roles/dhcp/templates/dhcpd.conf.j2
+    dest: "{{ $INPUT.root_directory }}/dhcpd.conf"
+  - src: roles/dhcp/templates/Dockerfile
+    dest: "{{ dockerfile_dir }}/{{ dhcp_service_name }}.Dockerfile"
+
+docker:
+  services:
+    - name: "{{ $INPUT.dhcp_service_name }}"
+      dockerfile: dhcp/templates/dhcp.Dockerfile
+      config_dir: "{{ $INPUT.root_directory }}"
+      volumes:
+        - "{{ $INPUT.config_volume_name }}:/data"
+      networks:
+        default: false
+    - name: "{{ $INPUT.dhcp_relay_service_name }}"
+      dockerfile: dhcp/templates/relay.Dockerfile
+      networks:
+        host: true
+      capabilities:
+        - NET_ADMIN
+  networks:
+    - name: "{{ $INPUT.dhcp_network_name }}"
+      subnet: "{{ $INPUT.dhcp_subnet }}"
+
+provides:
+  dhcp_server_ip: "{{ $INPUT.dhcp_server_ip }}"

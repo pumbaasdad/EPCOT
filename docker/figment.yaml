@@ -1,0 +1,42 @@
+deb_repos:
+  - url: "https://download.docker.com/linux/ubuntu"
+
+apt_keys:
+  - url: https://download.docker.com/linux/ubuntu/gpg
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - git
+  - software-properties-common
+  - docker-ce
+  - docker-compose-plugin
+
+services:
+  - docker
+
+pip_modules:
+  environment: "{{ $INPUT.virtualenv }}"
+  modules:
+  - docker
+  - docker-composer-v2
+
+users:
+  - "{{ $INPUT.user_name }}"
+
+groups:
+  - name: "{{ $INPUT.group_name }}"
+
+files:
+  - src: docker/templates/daemon.json.j2
+    dest: /etc/docker/daemon.json
+    notify:
+      - Restart docker daemon
+      - Stop docker containers
+  - src: docker/templates/docker-compose.yaml.j2
+    dest: "{{ $INPUT.root_directory }}/docker-compose.yaml"
+
+provides:
+  docker_user: "{{ $INPUT.user_name }}"
+  docker_group: "{{ $INPUT.group_name }}"

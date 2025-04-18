@@ -1,0 +1,14 @@
+packages:
+  - iptables-persistent
+  - netfilter-persistent
+
+directories:
+  - path: /etc/systemd/system/netfilter-persistent.service.d
+
+files:
+  - src: iptables/files/override.conf
+    dest: /etc/systemd/system/netfilter-persistent.service.d/override.conf
+    notify: Reload systemd for netfilter-persistent
+
+services:
+  - netfilter-persistent

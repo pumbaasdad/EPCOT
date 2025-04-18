@@ -1,0 +1,64 @@
+vars:
+  config_directory: "{{ $INPUT.root_directory }}/config"
+
+directories:
+  - path: "{{ $VAR.config_directory }}/config"
+    volume:
+      name: "{{ $INPUT.config_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/cache"
+    volume:
+      name: "{{ $INPUT.cache_volume_name }}"
+
+disabled_services:
+  - systemd-resolved
+
+files:
+  - src: dns/files/db.0
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/db.127
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/db.255
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/db.empty
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/db.local
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/db.root
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/named.conf
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/files/named.conf.default-zones
+    dest: "{{ $VAR.config_directory }}"
+    force: no
+  - src: dns/templates/named.conf.local.j2
+    dest: "{{ $VAR.config_directory }}/named.conf.local"
+  - src: dns/templates/named.conf.options.j2
+    dest: "{{ $VAR.config_directory }}/named.conf.options"
+  - src: dns/templates/db.root_zone.j2
+    dest: "{{ $VAR.config_directory }}/db.{{ $INPUT.root_domain }}"
+    zone_name: "{{ $INPUT.root_domain }}"
+    notify: Update DNS zone serial numbers
+  - src: dns/templates/resolv.conf.j2
+    dest: /etc/resolv.conf  
+
+docker:
+  services:
+    - name: "{{ $INPUT.service_name }}"
+      dockerfile: dns/templates/Dockerfile
+      config_dir: "{{ $INPUT.root_directory }}"
+      container_name: "{{ $INPUT.container_name }}"
+      environment:
+        - BIND9_USER={{ $INPUT.docker_user }}
+      ports:
+        - "53:53"
+        - "53:53/udp"
+      volumes:
+        - "{{ $INPUT.config_volume }}:/etc/bind"
+        - "{{ $INPUT.cache_volume }}:/var/cache/bind"

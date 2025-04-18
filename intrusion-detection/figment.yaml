@@ -1,0 +1,5 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}/jail.d"
+    volume:
+      name: "{{ $INPUT.jail_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/filter.d"

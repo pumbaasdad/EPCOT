@@ -1,0 +1,21 @@
+figments:
+  - backup
+  - certificates
+  - dhcp
+  - dns
+  - docker
+  - home-automation
+  - intrusion-detection
+  - iptables
+  - media-rip
+  - media-server
+  - reverse-proxy:
+      certificate_volume_name: "{{ $certificates.PROVIDES.certificate_volume }}"
+  - security
+  - shell
+  - transcode:
+      source_volume_name: "{{ $media-rip.PROVIDES.output_volume }}"
+  - tunnel:
+      internal_network_name: "{{ $reverse-proxy.PROVIDES.external_network_name }}"
+  - udev
+  - unifi

@@ -1,0 +1,79 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}"
+  - path: "{{ $INPUT.root_directory }}/nginx"
+    volume:
+      name: "{{ $INPUT.config_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/internal/log/nginx"
+    volume:
+      name: "{{ $INPUT.internal.log_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/internal/site-confs"
+    volume:
+      name: "{{ $INPUT.internal.site_configs_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/external/log/nginx"
+    volume:
+      name: "{{ $INPUT.external.log_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/external/site-confs"
+    volume:
+      name: "{{ $INPUT.external.site_configs_volume_name }}"
+
+files:
+  - src: roles/reverse-proxy/templates/nginx.conf
+    dest: "{{ $INPUT.root_directory }}/nginx/nginx.conf"
+  - src: roles/reverse-proxy/templates/default.j2
+    dest: "{{ $INPUT.root_directory }}/external/site-confs/default.conf"
+    vars:
+      listen_port: 80
+
+intrusion_detection:
+  jails:
+    - jail_name: nginx-http-auth
+      volume: "{{ $INPUT.external.log_volume_name }}"
+      file: error.log
+      max_retries: 5
+      port: https
+    - jail_name: nginx-badbots
+      volume: "{{ $INPUT.external.log_volume_name }}"
+      file: access.log
+      max_retries: 2
+      port: https
+    - jail_name: nginx-botsearch
+      volume: "{{ $INPUT.external.log_volume_name }}"
+      file: access.log
+      max_retries: 5
+      port: https
+
+docker:
+  services:
+    - name: "{{ $INPUT.internal.service_name }}"
+      dockerfile: reverse-proxy/templates/Dockerfile
+      config_dir: "{{ $INPUT.root_directory }}"
+      volumes:
+        - "{{ $INPUT.config_volume_name }}:/config/nginx"
+        - "{{ $INPUT.internal.site_configs_volume_name }}:/config/nginx/site-confs"
+        - "{{ $INPUT.internal.log_volume_name }}:/config/log/nginx"
+      ports:
+        - "443:443"
+      environment:
+        - DHLEVEL=2048
+      networks:
+        default_ipv4_address: "{{ $INPUT.internal.ip_address }}"
+    - name: "{{ $INPUT.external.service_name }}"
+      dockerfile: reverse-proxy/templates/Dockerfile
+      config_dir: "{{ $INPUT.root_directory }}"
+      volumes:
+        - "{{ $INPUT.config_volume_name }}:/config/nginx"
+        - "{{ $INPUT.external.site_configs_volume_name }}:/config/nginx/site-confs"
+        - "{{ $INPUT.external.log_volume_name }}:/config/log/nginx"
+      networks:
+        default: false
+        extra:
+          - "{{ $INPUT.bridge_network_name }}"
+          - "{{ $INPUT.external_network_name }}"
+  networks:
+    - name: "{{ $INPUT.bridge_network_name }}"
+      internal: true
+    - name: "{{ $INPUT.external_network_name }}"
+      internal: true
+
+provides:
+  external_network: "{{ $INPUT.external_network_name }}"

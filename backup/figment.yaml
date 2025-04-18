@@ -1,0 +1,33 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}"
+    volume:
+      name: "{{ $INPUT.cache_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/credentials"
+    volume:
+      name: "{{ $INPUT.credentials_volume_name }}"
+
+files:
+  - src: backup/templates/google_service_account.json.j2
+    dest: "{{ $INPUT.root_directory }}/credentials/google_service_account.json"
+
+docker:
+  services:
+    services:
+      - name: "{{ $INPUT.service_name }}"
+        dockerfile: backup/templates/Dockerfile
+        volumes:
+          - "{{ $INPUT.cache_volume_name }}:/volumerize-cache"
+          - "{{ $INPUT.credentials_volume_name }}:/credentials"
+          - /var/run/docker.sock:/var/run/docker.sock
+        environment:
+          - VOLUMERIZE_SOURCE=/source
+          - VOLUMERIZE_TARGET=gdrive://{{ $INPUT.google_service_account.email }}?myDriveFolderID={{ $INPUT.google_drive.folder_id }}
+          - VOLUMERIZE_EXCLUDE_1=**/*.log*
+          - PASSPHRASE={{ $INPUT.passphrase }}
+          - VOLUMERIZE_JOBBER_TIME={{ $INPUT.schedule }}
+          - VOLUMERIZE_FULL_IF_OLDER_THAN={{ $INPUT.full_if_older_than }}
+          - REMOVE_ALL_BUT_N_FULL={{ $INPUT.remove_all_but_n_full }}
+          - REMOVE_ALL_INC_BUT_N_FULL={{ $INPUT.remove_all_inc_but_n_full }}
+          - GOOGLE_SERVICE_JSON_FILE=/credentials/google_service_account.json
+          - APPRISE_NOTIFY=1
+          - APPRISE_NOTIFY_URL={{ $INPUT.apprise_url }}

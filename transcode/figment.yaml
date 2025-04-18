@@ -1,0 +1,51 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}"
+    volume:
+      name: "{{ $INPUT.config_volume_name }}"
+      backup: true
+  - path: "{{ $INPUT.root_directory }}/hooks"
+  - path: "{{ $INPUT.root_directory }}/ghb"
+
+files:
+  - src: transcode/templates/post_conversion.sh
+    dest: "{{ $INPUT.root_directory }}/hooks/post_conversion.sh"
+  - src: transcode/templates/post_watch_folder_processing.sh
+    dest: "{{ $INPUT.root_directory }}/hooks/post_watch_folder_processing.sh"
+  - src: transcode/templates/presets.json
+    dest: "{{ $INPUT.root_directory }}/ghb/presets.json"
+    backup: true
+
+nas_directories:
+  - path: "{{ $INPUT.nas_directory }}"
+    volume:
+      name: "{{ $INPUT.destination_volume_name }}"
+  - path: "{{ $INPUT.trash_directory }}"
+    volume:
+      name: "{{ $INPUT.trash_volume_name }}"
+  - path: "{{ $INPUT.dvr_directory }}"
+    volume:
+      name: "{{ $INPUT.dvr_volume_name }}"
+
+docker:
+  services:
+    - name: "{{ $INPUT.service_name }}"
+      dockerfile: transcode/templates/Dockerfile
+      ports:
+        - "{{ $INPUT.web_port }}:5800"
+      environment:
+        - KEEP_APP_RUNNING={{ $INPUT.keep_app_running }}
+        - AUTOMATED_CONVERSION_PRESET={{ $INPUT.preset }}
+        - AUTOMATED_CONVERSION_KEEP_SOURCE={{ $INPUT.keep_source_file }}
+        - AUTOMATED_CONVERSION_OUTPUT_SUBDIR={{ $INPUT.output_subdir }}
+        - AUTOMATED_CONVERSION_SOURCE_STABLE_TIME={{ $INPUT.input_stability_seconds }}
+        - AUTOMATED_CONVERSION_CHECK_INTERVAL={{ $INPUT.input_check_seconds }}
+        - AUTOMATED_CONVERSION_USE_TRASH=1
+        - AUTOMATED_CONVERSION_OUTPUT_DIR_2=/watch2
+        - AUTOMATED_CONVERSION_PRESET_2={{ $INPUT.dvr_preset }}
+        - AUTOMATED_CONVERSION_VIDEO_FILE_EXTENSIONS=ts TS
+      volumes:
+        - "{{ $INPUT.config_volume_name }}:/config"
+        - "{{ $INPUT.source_volume_name }}:/watch"
+        - "{{ $INPUT.destination_volume_name }}:/output"
+        - "{{ $INPUT.dvr_volume_name }}:/watch2"
+        - "{{ $INPUT.trash_volume_name }}:/trash:nocopy"

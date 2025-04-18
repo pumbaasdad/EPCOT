@@ -1,0 +1,45 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}"
+    volume:
+      name: "{{ $INPUT.config_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/data/backup"
+    volume:
+      name: "{{ $INPUT.backup_volume_name }}"
+      backup: true
+  - path: "{{ $INPUT.root_directory }}/mongodb/db"
+    owner: 999
+    volume:
+      name: "{{ $INPUT.db_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/mongodb/init"
+
+files:
+  - src: roles/unifi/templates/init-mongo.js.j2
+    dest: "{{ $INPUT.root_directory }}/mongodb/init/init-mongo.js"
+
+docker:
+  services:
+    - name: "{{ $INPUT.unifi.service_name }}"
+      dockerfile: unifi/templates/unifi.Dockerfile
+      environment:
+        - MONGO_USER={{ $INPUT.mongodb.user }}
+        - MONGO_PASS={{ $INPUT.mongodb.password }}
+        - MONGO_HOST={{ $INPUT.mongodb.service_name }}
+        - MONGO_PORT=27017
+        - MONGO_DBNAME={{ $INPUT.mongodb.dbname }}
+      volumes:
+        - "{{ $INPUT.config_volume_name }}:/config"
+      ports:
+        - "{{ $INPUT.unifi.web_port }}:8443"
+        - 3478:3478/udp
+        - 10001:10001/udp
+        - 8080:8080
+        - 8843:8843
+        - 8880:8880
+        - 6789:6789
+        - 5514:5514/udp
+      backup: true
+    - name: "{{ $INPUT.mongodb.service_name }}"
+      dockerfile: unifi/templates/mongodb.Dockerfile
+      volumes:
+        - "{{ $INPUT.db_volume_name }}:/data/db"
+        - "{{ $INPUT.root_directory }}/mongodb/init/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro"

@@ -1,0 +1,42 @@
+docker:
+  services:
+    - name: "{{ $INPUT.service_name }}"
+      dockerfile: tunnel/templates/Dockerfile
+      environment:
+        - TUNNEL_TOKEN={{ $INPUT.cloudflare_token }}
+      command: tunnel run
+      networks:
+        default: false
+        extra:
+          - "{{ $INPUT.external_network_name }}"
+          - "{{ $INPUT.internal_network }}"
+  networks:
+    - name: "{{ $INPUT.external_network_name }}"
+
+iptable_rules:
+  - chain: DOCKER-USER
+    out_interface: "{{ $INPUT.external_network_name }}"
+    jump: DROP
+    ip_version: ipv4
+  - chain: DOCKER-USER
+    out_interface: "{{ $INPUT.external_network_name }}"
+    cstate: [ESTABLISHED, RELATED]
+    jump: ACCEPT
+    ip_version: ipv4
+  - chain : INPUT
+    in_interface: "{{ $INPUT.external_network_name }}"
+    jump: DROP
+    ip_version: ipv4
+  - chain: DOCKER-USER
+    out_interface: "{{ $INPUT.external_network_name }}"
+    jump: DROP
+    ip_version: ipv6
+  - chain: DOCKER-USER
+    out_interface: "{{ $INPUT.external_network_name }}"
+    cstate: [ESTABLISHED, RELATED]
+    jump: ACCEPT
+    ip_version: ipv6
+  - chain : INPUT
+    in_interface: "{{ $INPUT.external_network_name }}"
+    jump: DROP
+    ip_version: ipv6

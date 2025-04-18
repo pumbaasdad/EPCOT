@@ -1,0 +1,34 @@
+directories:
+  - path: "{{ $INPUT.root_directory }}"
+    volume:
+      name: "{{ $INPUT.certificate_volume_name }}"
+  - path: "{{ $INPUT.root_directory }}/etc"
+    volume:
+      name: "{{ $INPUT.etc_volume_name }}"
+      backup: true
+
+files:
+  - src: roles/certificates/templates/Dockerfile
+    dest: "{{ dockerfile_dir }}/{{ letsencrypt_service_name }}.Dockerfile"
+  - src: roles/certificates/templates/cloudflare.ini.j2
+    dest: "{{ $INPUT.root_directory }}/dns-conf/cloudflare.ini"
+    mode: '0600'
+
+docker:
+  services:
+    - name: "{{ $INPUT.service_name }}"
+      dockerfile: certificates/templates/Dockerfile
+      volumes:
+        - "{{ $INPUT.certificate_volume_name }}:/config"
+      environment:
+        - EMAIL={{ $INPUT.email }}
+        - URL={{ $INPUT.domain }}
+        - VALIDATION=dns
+        - DNSPLUGIN=cloudflare
+        - PROPAGATION=30
+      capabilities:
+        - NET_ADMIN
+      backup: true
+
+provides:
+  certificate_volume: "{{ $INPUT.certificate_volume_name }}"

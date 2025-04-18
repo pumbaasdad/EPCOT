@@ -1,0 +1,87 @@
+vars:
+  controller_directory: "{{ $INPUT.root_directory }}/controller"
+  database_directory: "{{ $INPUT.root_directory }}/db"
+  zwave_directory: "{{ $INPUT.root_directory }}/zwave"
+
+udev_devices:
+  - subsystem: tty
+    attrs:
+      idVendor: "{{ $INPUT.zwave.vendor }}"
+      idProduct: "{{ $INPUT.zwave.product }}"
+    symlink: "{{ $INPUT.zwave.usbstick_symlink }}"
+
+directories:
+  - path: "{{ $VAR.controller_directory }}"
+    volume:
+      name: "{{ $INPUT.controller.config_volume_name }}"
+      backup: true
+  - path: "{{ $VAR.database_directory }}"
+    volume:
+      name: "{{ $INPUT.controller.database_volume_name }}"
+  - path: "{{ $VAR.zwave_directory }}"
+    volume:
+      name: "{{ $INPUT.zwave.config_volume_name }}"
+      backup: true
+
+files:
+  - src: home-automation/templates/home-assistant.log
+    dest: "{{ $VAR.controller_directory }}/home-assistant.log"
+    force: no
+  - src: roles/home-automation/templates/google_service_account.json.j2
+    dest: "{{ $VAR.controller_directory }}/google_service_account.json"
+  - src: roles/home-automation/templates/configuration.yaml.j2
+    dest: "{{ $VAR.controller_directory }}/configuration.yaml"
+    backup: true
+  - src: roles/home-automation/templates/settings.json.j2
+    dest: "{{ $VAR.zwave_directory }}/settings.json"
+    backup: true
+
+intrusion_detection:
+  jails:
+    - jail_name: ha
+      volume: "{{ $INPUT.controller.config_volume_name }}"
+      file: home-assistant.log
+  filters:
+    - src: home-automation/templates/filter.local.j2
+      dest: ha.local
+
+reverse_proxies:
+  - subdomain: "{{ $INPUT.subdomain }}"
+    internal:
+      host: "{{ $INPUT.controller.container_name }}"
+      port: "{{ $INPUT.controller.internal_web_port }}"
+    external:
+      port: "{{ $INPUT.controller.external_web_port }}"
+      locations:
+        - /api/google_assistant
+        - /auth/token
+        -
+docker:
+  services:
+    - name: "{{ $INPUT.controller.service_name }}"
+      dockerfile: home-automation/templates/hass.Dockerfile
+      container_name: "{{ $INPUT.controller.container_name }}"
+      volumes:
+        - "{{ $INPUT.controller.config_volume_name }}:/config"
+        - "{{ $INPUT.controller.database_volume_name }}:/db"
+      config_dir: "{{ $VAR.controller_directory }}"
+      backup: true
+    - name: "{{ $INPUT.zwave.service_name }}"
+      dockerfile: home-automation/templates/zwave.Dockerfile
+      config_dir: "{{ $VAR.zwave_directory }}"
+      ports:
+        - "{{ $INPUT.zwave.web_port }}:8091"
+        - "{{ $INPUT.zwave.websocket_port }}:3000"
+      volumes:
+        - "{{ $INPUT.zwave.config_volume_name }}:/usr/src/app/store"
+      environment:
+        - SESSION_SECRET={{ $INPUT.zwave.session_secret }}
+        - KEY_S0_Legacy={{ $INPUT.zwave.s0_legacy_key }}
+        - KEY_S2_Unauthenticated={{ $INPUT.zwave.s2_unauthenticated_key }}
+        - KEY_S2_Authenticated={{ $INPUT.zwave.s2_authenticated_key }}
+        - KEY_S2_AccessControl={{ $INPUT.zwave_s2_access_control_key }}
+      devices:
+        - /dev/{{ $INPUT.zwave.usbstick_symlink }}:/dev/zwave
+      tty: true
+      stop_signal: SIGINT
+      backup: true
