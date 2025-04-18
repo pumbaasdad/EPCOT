@@ -50,8 +50,8 @@ This document serves as a comprehensive checklist for implementing the EPCOT pro
 - [x] Add methods for adding tasks
 - [x] Add methods for organizing tasks into plays
 - [x] Add methods for setting playbook-level variables
-- [ ] Add methods for setting playbook-level handlers
-- [ ] Implement task ordering based on dependencies
+- [x] Add methods for setting playbook-level handlers
+- [x] Implement task ordering based on dependencies
 - [x] Implement playbook validation methods
 - [x] Implement dictionary conversion methods
 - [x] Write unit tests for Playbook

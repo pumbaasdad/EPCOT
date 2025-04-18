@@ -14,6 +14,22 @@ Task
    :undoc-members:
    :show-inheritance:
 
+Handler
+~~~~~~~
+
+.. autoclass:: epcot.adk.Handler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Play
+~~~~
+
+.. autoclass:: epcot.adk.Play
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Playbook
 ~~~~~~~~
 
