@@ -1,5 +1,49 @@
 # General Requirements
+# EPCOT Schema Validation Requirements
 
+## 1. Basic Schema Requirements
+- Each figment schema MUST be a valid YAML document
+- All template variables MUST follow the format `{{ $INPUT.variable_name }}` or `{{ $VAR.variable_name }}`
+
+## 2. Top-Level Sections
+The following sections are optional but MUST follow defined structure when present:
+- `vars`: Key-value pairs for internal figment variables
+- `directories`: List of directory configurations
+- `files`: List of file configurations
+- `docker`: Docker-related configurations
+- `provides`: Values this figment makes available to other figments
+
+## 3. Docker Service Validation
+- Under `docker.services`:
+  - MUST be a flat list (no nested `services` keys)
+  - Each service MAY include:
+    - `config_dir`
+    - `volumes`
+    - `networks`
+    - `environment`
+    - `capabilities`
+    - Other standard Docker service configurations
+
+## 4. Dependencies and References
+- Values referenced from other figments MUST:
+  - Reference an existing figment
+  - Reference a value defined in that figment's `provides` section
+- Circular dependencies between figments:
+  - MUST be allowed during validation
+  - MAY result in runtime errors during Ansible playbook execution
+  - No validation errors should be raised for circular references
+  - Users are responsible for ensuring their circular references are resolvable or for handling resulting errors appropriately
+
+## 5. Error Reporting
+Validation errors MUST include:
+- Error location (figment name and field path)
+- Description of the validation failure
+- Suggested fix when applicable
+
+## 6. Volume References
+- Volume names referenced in `volumes` sections MUST be:
+  - Defined in the same figment's `directories` section, OR
+  - Provided by another figment through its `provides` section
  * This project will be released under the MIT license.
     * All dependencies must be compatible with the MIT license.
  * This project will be built using Python 3.12.3
