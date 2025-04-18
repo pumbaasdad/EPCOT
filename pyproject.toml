@@ -5,7 +5,7 @@ description = "EPCOT - Experimental Prototype Community of Tomorrow"
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 license = "MIT"
-packages = [{include = "epcot", from = "src"}]
+packages = [{include = "epcot", from = "src"}, {include = "adk", from = "src"}]
 
 [tool.poetry.scripts]
 epcot = "epcot.cli:main"
