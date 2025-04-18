@@ -1,19 +1,47 @@
-[project]
+[tool.poetry]
 name = "epcot"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "Your Name",email = "you@example.com"}
-]
+description = "A system for managing infrastructure using Ansible"
+authors = ["Your Name <you@example.com>"]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-]
-
-[tool.poetry]
 packages = [{include = "epcot", from = "src"}]
 
+[tool.poetry.dependencies]
+python = "==3.12.3"
+ansible = "^9.0.0"
+ansible-runner = "^2.3.4"
+pyyaml = "^6.0.1"
+typing-extensions = "^4.9.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+flake8 = "^7.0.0"
+pytest = "^8.0.0"
+pytest-cov = "^4.1.0"
+mypy = "^1.7.0"
+sphinx = "^7.2.6"
+sphinx-rtd-theme = "^2.0.0"
+pre-commit = "^3.5.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+addopts = "--cov=epcot --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
