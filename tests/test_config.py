@@ -6,7 +6,9 @@ import tempfile
 import yaml
 from typing import Dict, Any, Generator
 
-from epcot.config import load_config, get_figments, get_figment_config
+from epcot.config import (
+    load_config, get_figments, get_figment_config, process_template_values
+)
 
 
 @pytest.fixture
@@ -89,3 +91,68 @@ def test_get_figment_config_not_found(figment_dir: Path) -> None:
     """Test loading a non-existent figment configuration."""
     with pytest.raises(FileNotFoundError):
         get_figment_config("non-existent-figment", figment_dir)
+
+
+def test_process_template_values_input() -> None:
+    """Test processing template values with $INPUT."""
+    config = {"key": "{{ $INPUT.value }}"}
+    processed = process_template_values(config, "test-figment")
+    assert processed["key"] == "{{ __test_figment__input__value }}"
+
+
+def test_process_template_values_var() -> None:
+    """Test processing template values with $VAR."""
+    config = {"key": "{{ $VAR.value }}"}
+    processed = process_template_values(config, "test-figment")
+    assert processed["key"] == "{{ __test_figment__var__value }}"
+
+
+def test_process_template_values_nested() -> None:
+    """Test processing template values in nested structures."""
+    config = {
+        "key1": "{{ $INPUT.value1 }}",
+        "key2": [
+            "{{ $VAR.value2 }}",
+            {"key3": "{{ $INPUT.value3 }}"}
+        ]
+    }
+    processed = process_template_values(config, "test-figment")
+    assert processed["key1"] == "{{ __test_figment__input__value1 }}"
+    assert processed["key2"][0] == "{{ __test_figment__var__value2 }}"
+    assert processed["key2"][1]["key3"] == "{{ __test_figment__input__value3 }}"
+
+
+def test_process_template_values_invalid() -> None:
+    """Test processing template values with invalid prefix."""
+    config = {"key": "{{ $INVALID.value }}"}
+    with pytest.raises(ValueError) as excinfo:
+        process_template_values(config, "test-figment")
+    assert "Invalid template variable" in str(excinfo.value)
+    assert "Only '$INPUT.' and '$VAR.' prefixes are allowed" in str(excinfo.value)
+
+
+def test_process_template_values_edge_cases() -> None:
+    """Test processing template values with edge cases."""
+    # Test with spaces in the template
+    config1 = {"key": "{{ $INPUT.value }}"}
+    processed1 = process_template_values(config1, "test-figment")
+    assert processed1["key"] == "{{ __test_figment__input__value }}"
+
+    # Test with multiple template variables in a single string
+    config2 = {"key": "prefix {{ $INPUT.value1 }} middle {{ $VAR.value2 }} suffix"}
+    processed2 = process_template_values(config2, "test-figment")
+    expected = (
+        "prefix {{ __test_figment__input__value1 }} "
+        "middle {{ __test_figment__var__value2 }} suffix"
+    )
+    assert processed2["key"] == expected
+
+    # Test with dots in the variable name
+    config3 = {"key": "{{ $INPUT.nested.value }}"}
+    processed3 = process_template_values(config3, "test-figment")
+    assert processed3["key"] == "{{ __test_figment__input__nested.value }}"
+
+    # Test with hyphens in the figment name
+    config4 = {"key": "{{ $INPUT.value }}"}
+    processed4 = process_template_values(config4, "test-with-hyphens")
+    assert processed4["key"] == "{{ __test_with_hyphens__input__value }}"

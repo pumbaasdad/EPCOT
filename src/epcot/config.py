@@ -3,8 +3,9 @@
 This module provides utilities for loading and parsing EPCOT configuration files.
 """
 
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Union, cast
 import yaml
 
 
@@ -49,6 +50,69 @@ def get_figments(config: Dict[str, Any]) -> List[str]:
     return figments
 
 
+def process_template_values(
+    config: Union[Dict[str, Any], List[Any], str, Any], figment_name: str
+) -> Union[Dict[str, Any], List[Any], str, Any]:
+    """Process template values in the configuration.
+
+    Recursively checks all values in the configuration. If a value is a string
+    containing "{{ }}", it checks if it begins with "$INPUT." or "$VAR." and
+    replaces it with the appropriate pattern. If it doesn't, it raises an error.
+
+    Args:
+        config: The configuration to process.
+        figment_name: The name of the figment.
+
+    Returns:
+        The processed configuration.
+
+    Raises:
+        ValueError: If a template value doesn't begin with "$INPUT." or "$VAR.".
+    """
+    # Replace hyphens with underscores in figment name
+    safe_figment_name = figment_name.replace("-", "_")
+
+    # Regular expression to match {{ $INPUT.xxx }} or {{ $VAR.xxx }}
+    template_pattern = re.compile(r"\{\{\s*(\$[A-Za-z0-9_.-]+)\s*\}\}")
+
+    if isinstance(config, dict):
+        # Process dictionary values
+        return {k: process_template_values(v, figment_name) for k, v in config.items()}
+    elif isinstance(config, list):
+        # Process list values
+        return [process_template_values(item, figment_name) for item in config]
+    elif isinstance(config, str):
+        # Process string values
+        def replace_template(match):
+            template_var = match.group(1)
+            if template_var.startswith("$INPUT."):
+                # Replace $INPUT. with __<figment name>__input__
+                return (
+                    "{{ __" + safe_figment_name + "__input__" + template_var[7:] + " }}"
+                )
+            elif template_var.startswith("$VAR."):
+                # Replace $VAR. with __<figment name>__var__
+                return (
+                    "{{ __" + safe_figment_name + "__var__" + template_var[5:] + " }}"
+                )
+            else:
+                # Raise error for other template variables
+                raise ValueError(
+                    f"Invalid template variable '{template_var}' "
+                    f"in figment '{figment_name}'. "
+                    f"Only '$INPUT.' and '$VAR.' prefixes are allowed."
+                )
+
+        # Find all template variables and process them
+        matches = template_pattern.findall(config)
+        if matches:
+            return template_pattern.sub(replace_template, config)
+        return config
+    else:
+        # Return other values as-is
+        return config
+
+
 def get_figment_config(
     figment_name: str, config_dir: Optional[Path] = None
 ) -> Dict[str, Any]:
@@ -64,10 +128,15 @@ def get_figment_config(
 
     Raises:
         FileNotFoundError: If the figment configuration file does not exist.
+        ValueError: If a template value doesn't begin with "$INPUT." or "$VAR.".
     """
     if config_dir is None:
         config_dir = Path(".")
 
     figment_path = config_dir / figment_name / "figment.yaml"
 
-    return load_config(figment_path)
+    # Load the configuration
+    config = load_config(figment_path)
+
+    # Process template values
+    return process_template_values(config, figment_name)
