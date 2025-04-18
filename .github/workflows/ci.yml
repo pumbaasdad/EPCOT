@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python 3.12.3
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12.3
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      
+      - name: Run Black check
+        run: poetry run black --check .
+      
+      - name: Run Flake8
+        run: poetry run flake8
+      
+      - name: Run MyPy
+        run: poetry run mypy src tests
+      
+      - name: Run tests
+        run: poetry run pytest
+      
+      - name: Build documentation
+        run: |
+          cd docs
+          poetry run sphinx-build -b html source build/html
+
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python 3.12.3
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12.3
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      
+      - name: Check licenses
+        run: |
+          # Simple check to ensure all dependencies are compatible with MIT
+          poetry run pip install pip-licenses
+          poetry run pip-licenses --allow-only="MIT License;BSD License;Apache Software License;Python Software Foundation License"
