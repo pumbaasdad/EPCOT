@@ -4,13 +4,18 @@ Ansible Development Kit (ADK) module.
 This module provides a programmatic interface for creating and managing Ansible tasks and playbooks.
 """
 
-from typing import Dict, List, Optional, Union, Any, Set, TextIO, BinaryIO
+from typing import Dict, List, Optional, Union, Any, Set, TextIO, BinaryIO, Callable
 from collections import defaultdict
 import os
 import yaml
+import tempfile
+import ansible_runner
 from pathlib import Path
 
-__all__ = ["Task", "Play", "Playbook", "TaskResult", "Handler", "to_yaml", "to_yaml_file"]
+__all__ = [
+    "Task", "Play", "Playbook", "TaskResult", "Handler", 
+    "to_yaml", "to_yaml_file", "run_playbook", "run_playbook_with_runner"
+]
 
 
 class Task:
@@ -85,6 +90,39 @@ class Task:
             return yaml.dump([task_dict], default_flow_style=False)
         except yaml.YAMLError as e:
             raise yaml.YAMLError(f"Failed to convert task '{self.name}' to YAML: {e}")
+
+    def to_runner_dict(self) -> Dict[str, Any]:
+        """
+        Convert the task to a dictionary representation for ansible_runner.
+
+        Returns:
+            A dictionary representation of the task suitable for ansible_runner
+
+        Note:
+            This is similar to to_dict() but may include additional fields
+            required by ansible_runner.
+        """
+        # For a single task, the runner dict is the same as the regular dict
+        return self.to_dict()
+
+    def validate_runner(self) -> List[str]:
+        """
+        Validate the task for ansible_runner conversion.
+
+        Returns:
+            A list of validation errors, or an empty list if the task is valid for ansible_runner
+        """
+        # Basic validation is the same as for regular validation
+        return self.validate()
+
+    def is_valid_runner(self) -> bool:
+        """
+        Check if the task is valid for ansible_runner conversion.
+
+        Returns:
+            True if the task is valid for ansible_runner, False otherwise
+        """
+        return len(self.validate_runner()) == 0
 
     def validate(self) -> List[str]:
         """
@@ -589,6 +627,138 @@ class Playbook:
         except yaml.YAMLError as e:
             raise yaml.YAMLError(f"Failed to convert playbook '{self.name}' to YAML: {e}")
 
+    def to_runner_dict(self) -> Dict[str, Any]:
+        """
+        Convert the playbook to a dictionary representation for ansible_runner.
+
+        Returns:
+            A dictionary representation of the playbook suitable for ansible_runner
+
+        Note:
+            This creates a dictionary structure that can be used with ansible_runner.run()
+        """
+        # Order tasks based on dependencies
+        self.order_tasks()
+
+        # Convert plays to dictionaries
+        playbook_dict = self.to_dict()
+
+        # ansible_runner expects a dictionary with specific keys
+        runner_dict = {
+            "playbook": playbook_dict
+        }
+
+        return runner_dict
+
+    def validate_runner(self) -> List[str]:
+        """
+        Validate the playbook for ansible_runner conversion.
+
+        Returns:
+            A list of validation errors, or an empty list if the playbook is valid for ansible_runner
+        """
+        errors = self.validate()
+
+        # Additional validation for ansible_runner
+        for play in self.plays:
+            for task in play.tasks:
+                task_errors = task.validate_runner()
+                if task_errors:
+                    errors.append(f"Task '{task.name}' is invalid for ansible_runner: {', '.join(task_errors)}")
+
+            for handler in play.handlers:
+                handler_errors = handler.validate_runner()
+                if handler_errors:
+                    errors.append(f"Handler '{handler.name}' is invalid for ansible_runner: {', '.join(handler_errors)}")
+
+        for handler in self.handlers:
+            handler_errors = handler.validate_runner()
+            if handler_errors:
+                errors.append(f"Handler '{handler.name}' is invalid for ansible_runner: {', '.join(handler_errors)}")
+
+        return errors
+
+    def is_valid_runner(self) -> bool:
+        """
+        Check if the playbook is valid for ansible_runner conversion.
+
+        Returns:
+            True if the playbook is valid for ansible_runner, False otherwise
+        """
+        return len(self.validate_runner()) == 0
+
+    def run_with_runner(
+        self, 
+        inventory: Optional[Union[str, Dict[str, Any]]] = None,
+        private_data_dir: Optional[str] = None,
+        **kwargs: Any
+    ) -> "TaskResult":
+        """
+        Run the playbook using ansible_runner.
+
+        Args:
+            inventory: The inventory to use (path to inventory file or inventory dict)
+            private_data_dir: The private data directory to use
+            **kwargs: Additional arguments to pass to ansible_runner.run()
+
+        Returns:
+            The result of running the playbook
+
+        Raises:
+            ValueError: If the playbook is invalid for ansible_runner
+        """
+        if not self.is_valid_runner():
+            errors = self.validate_runner()
+            raise ValueError(f"Playbook is invalid for ansible_runner: {', '.join(errors)}")
+
+        # Create a temporary directory for the playbook if no private_data_dir is provided
+        temp_dir = None
+        if not private_data_dir:
+            temp_dir = tempfile.TemporaryDirectory()
+            private_data_dir = temp_dir.name
+
+        try:
+            # Convert the playbook to a dictionary for ansible_runner
+            playbook_dict = self.to_runner_dict()
+
+            # Set up the inventory
+            if inventory:
+                if isinstance(inventory, dict):
+                    # Create inventory file in the private data dir
+                    os.makedirs(os.path.join(private_data_dir, "inventory"), exist_ok=True)
+                    with open(os.path.join(private_data_dir, "inventory", "hosts"), "w") as f:
+                        yaml.dump(inventory, f)
+                else:
+                    # Use the provided inventory file
+                    playbook_dict["inventory"] = inventory
+
+            # Run the playbook
+            result = ansible_runner.run(
+                private_data_dir=private_data_dir,
+                playbook=playbook_dict["playbook"],
+                **kwargs
+            )
+
+            # Convert the result to a TaskResult
+            return TaskResult(
+                success=(result.rc == 0),
+                changed=any(event.get("event_data", {}).get("changed", False) 
+                           for event in result.events if event.get("event") == "runner_on_ok"),
+                error=result.stderr if result.rc != 0 else None,
+                output={
+                    "rc": result.rc,
+                    "status": result.status,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "events": [event for event in result.events],
+                    "stats": result.stats
+                }
+            )
+        finally:
+            # Clean up the temporary directory if we created one
+            if temp_dir:
+                temp_dir.cleanup()
+
     def validate_yaml(self) -> List[str]:
         """
         Validate the playbook for YAML conversion.
@@ -843,3 +1013,173 @@ def to_yaml_file(obj: Any, file_path: Union[str, Path], mode: str = "w") -> None
             f.write(yaml_str)
     except IOError as e:
         raise IOError(f"Failed to write YAML to file '{file_path}': {e}")
+
+
+def run_playbook(
+    playbook: Union[Playbook, Dict[str, Any], str, Path],
+    inventory: Optional[Union[str, Dict[str, Any]]] = None,
+    private_data_dir: Optional[str] = None,
+    **kwargs: Any
+) -> TaskResult:
+    """
+    Run an Ansible playbook using ansible_runner.
+
+    Args:
+        playbook: The playbook to run (Playbook object, dictionary, or path to playbook file)
+        inventory: The inventory to use (path to inventory file or inventory dict)
+        private_data_dir: The private data directory to use
+        **kwargs: Additional arguments to pass to ansible_runner.run()
+
+    Returns:
+        The result of running the playbook
+
+    Raises:
+        ValueError: If the playbook is invalid
+        TypeError: If the playbook is not a Playbook, dictionary, or string
+    """
+    # If playbook is a Playbook object, use its run_with_runner method
+    if isinstance(playbook, Playbook):
+        return playbook.run_with_runner(
+            inventory=inventory,
+            private_data_dir=private_data_dir,
+            **kwargs
+        )
+
+    # Create a temporary directory for the playbook if no private_data_dir is provided
+    temp_dir = None
+    if not private_data_dir:
+        temp_dir = tempfile.TemporaryDirectory()
+        private_data_dir = temp_dir.name
+
+    try:
+        # Set up the playbook
+        if isinstance(playbook, dict):
+            # Use the provided playbook dictionary
+            playbook_dict = playbook
+        elif isinstance(playbook, (str, Path)):
+            # Use the provided playbook file
+            playbook_path = str(playbook)
+        else:
+            raise TypeError("Playbook must be a Playbook object, dictionary, or path to a playbook file")
+
+        # Set up the inventory
+        if inventory:
+            if isinstance(inventory, dict):
+                # Create inventory file in the private data dir
+                os.makedirs(os.path.join(private_data_dir, "inventory"), exist_ok=True)
+                with open(os.path.join(private_data_dir, "inventory", "hosts"), "w") as f:
+                    yaml.dump(inventory, f)
+            else:
+                # Use the provided inventory file
+                kwargs["inventory"] = inventory
+
+        # Run the playbook
+        if isinstance(playbook, dict):
+            result = ansible_runner.run(
+                private_data_dir=private_data_dir,
+                playbook=playbook_dict,
+                **kwargs
+            )
+        else:
+            result = ansible_runner.run(
+                private_data_dir=private_data_dir,
+                playbook=playbook_path,
+                **kwargs
+            )
+
+        # Convert the result to a TaskResult
+        return TaskResult(
+            success=(result.rc == 0),
+            changed=any(event.get("event_data", {}).get("changed", False) 
+                       for event in result.events if event.get("event") == "runner_on_ok"),
+            error=result.stderr if result.rc != 0 else None,
+            output={
+                "rc": result.rc,
+                "status": result.status,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "events": [event for event in result.events],
+                "stats": result.stats
+            }
+        )
+    finally:
+        # Clean up the temporary directory if we created one
+        if temp_dir:
+            temp_dir.cleanup()
+
+
+def run_playbook_with_runner(
+    playbook_content: Union[str, Dict[str, Any]],
+    inventory_content: Optional[Dict[str, Any]] = None,
+    private_data_dir: Optional[str] = None,
+    **kwargs: Any
+) -> TaskResult:
+    """
+    Run an Ansible playbook using ansible_runner with provided content.
+
+    Args:
+        playbook_content: The content of the playbook (YAML string or dictionary)
+        inventory_content: The content of the inventory (dictionary)
+        private_data_dir: The private data directory to use
+        **kwargs: Additional arguments to pass to ansible_runner.run()
+
+    Returns:
+        The result of running the playbook
+
+    Raises:
+        ValueError: If the playbook content is invalid
+    """
+    # Create a temporary directory for the playbook if no private_data_dir is provided
+    temp_dir = None
+    if not private_data_dir:
+        temp_dir = tempfile.TemporaryDirectory()
+        private_data_dir = temp_dir.name
+
+    try:
+        # Set up the playbook
+        os.makedirs(os.path.join(private_data_dir, "project"), exist_ok=True)
+        playbook_path = os.path.join(private_data_dir, "project", "playbook.yml")
+
+        if isinstance(playbook_content, dict):
+            # Convert dictionary to YAML
+            with open(playbook_path, "w") as f:
+                yaml.dump(playbook_content, f)
+        elif isinstance(playbook_content, str):
+            # Write YAML string to file
+            with open(playbook_path, "w") as f:
+                f.write(playbook_content)
+        else:
+            raise TypeError("Playbook content must be a dictionary or YAML string")
+
+        # Set up the inventory
+        if inventory_content:
+            os.makedirs(os.path.join(private_data_dir, "inventory"), exist_ok=True)
+            with open(os.path.join(private_data_dir, "inventory", "hosts"), "w") as f:
+                yaml.dump(inventory_content, f)
+
+        # Run the playbook
+        result = ansible_runner.run(
+            private_data_dir=private_data_dir,
+            playbook="playbook.yml",
+            **kwargs
+        )
+
+        # Convert the result to a TaskResult
+        return TaskResult(
+            success=(result.rc == 0),
+            changed=any(event.get("event_data", {}).get("changed", False) 
+                       for event in result.events if event.get("event") == "runner_on_ok"),
+            error=result.stderr if result.rc != 0 else None,
+            output={
+                "rc": result.rc,
+                "status": result.status,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "events": [event for event in result.events],
+                "stats": result.stats
+            }
+        )
+    finally:
+        # Clean up the temporary directory if we created one
+        if temp_dir:
+            temp_dir.cleanup()

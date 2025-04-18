@@ -64,11 +64,11 @@ This document serves as a comprehensive checklist for implementing the EPCOT pro
 - [x] Write unit tests for YAML conversion
 
 ### 2.4 ansible_runner Integration
-- [ ] Implement Task to ansible_runner dictionary conversion
-- [ ] Implement Playbook to ansible_runner dictionary conversion
-- [ ] Add validation during conversion
-- [ ] Implement playbook execution utilities
-- [ ] Write unit tests for ansible_runner integration
+- [x] Implement Task to ansible_runner dictionary conversion
+- [x] Implement Playbook to ansible_runner dictionary conversion
+- [x] Add validation during conversion
+- [x] Implement playbook execution utilities
+- [x] Write unit tests for ansible_runner integration
 
 ### 2.5 Basic Task Implementations
 - [ ] Implement FileTask class

@@ -3,7 +3,11 @@ Tests for the ADK module.
 """
 
 import pytest
-from epcot.adk import Task, Play, Playbook, TaskResult, Handler, to_yaml, to_yaml_file
+from unittest.mock import patch, MagicMock
+from epcot.adk import (
+    Task, Play, Playbook, TaskResult, Handler, 
+    to_yaml, to_yaml_file, run_playbook, run_playbook_with_runner
+)
 
 
 def test_task_creation():
@@ -717,3 +721,368 @@ def test_to_yaml_file(tmp_path):
     # Test with an invalid file path
     with pytest.raises(IOError):
         to_yaml_file(task, "/invalid/path/task.yaml")
+
+
+def test_task_to_runner_dict():
+    """Test that a Task can be converted to an ansible_runner dictionary."""
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+        when="ansible_distribution == 'Ubuntu'",
+        register="nginx_install",
+        tags=["web", "nginx"],
+    )
+
+    runner_dict = task.to_runner_dict()
+
+    assert runner_dict["name"] == "Install nginx"
+    assert runner_dict["apt"] == {"name": "nginx", "state": "present"}
+    assert runner_dict["when"] == "ansible_distribution == 'Ubuntu'"
+    assert runner_dict["register"] == "nginx_install"
+    assert runner_dict["tags"] == ["web", "nginx"]
+
+
+def test_playbook_to_runner_dict():
+    """Test that a Playbook can be converted to an ansible_runner dictionary."""
+    playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+        become=True,
+        vars={"nginx_version": "1.18.0"},
+    )
+
+    task1 = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    task2 = Task(
+        name="Configure nginx",
+        module="template",
+        args={"src": "nginx.conf.j2", "dest": "/etc/nginx/nginx.conf"},
+    )
+
+    handler = Handler(
+        name="Restart nginx",
+        module="service",
+        args={"name": "nginx", "state": "restarted"},
+    )
+
+    playbook.add_task(task1)
+    playbook.add_task(task2)
+    playbook.add_handler(handler)
+    playbook.add_dependency("Configure nginx", "Install nginx")
+
+    runner_dict = playbook.to_runner_dict()
+
+    assert "playbook" in runner_dict
+    assert isinstance(runner_dict["playbook"], list)
+    assert len(runner_dict["playbook"]) == 1  # One play
+
+    play_dict = runner_dict["playbook"][0]
+    assert play_dict["name"] == "Setup Web Server"
+    assert play_dict["hosts"] == "web_servers"
+    assert play_dict["become"] is True
+    assert play_dict["vars"] == {"nginx_version": "1.18.0"}
+    assert len(play_dict["tasks"]) == 2
+    assert play_dict["tasks"][0]["name"] == "Install nginx"
+    assert play_dict["tasks"][1]["name"] == "Configure nginx"
+    assert len(play_dict["handlers"]) == 1
+    assert play_dict["handlers"][0]["name"] == "Restart nginx"
+
+
+def test_task_validate_runner():
+    """Test that a Task can be validated for ansible_runner."""
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    assert task.is_valid_runner()
+    assert task.validate_runner() == []
+
+    # Test with invalid task
+    invalid_task = Task(
+        name="",  # Empty name is invalid
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    assert not invalid_task.is_valid_runner()
+    errors = invalid_task.validate_runner()
+    assert len(errors) == 1
+    assert "Task must have a name" in errors[0]
+
+
+def test_playbook_validate_runner():
+    """Test that a Playbook can be validated for ansible_runner."""
+    playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+    )
+
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    playbook.add_task(task)
+
+    assert playbook.is_valid_runner()
+    assert playbook.validate_runner() == []
+
+    # Test with invalid task
+    invalid_playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+    )
+
+    invalid_task = Task(
+        name="",  # Empty name is invalid
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    invalid_playbook.add_task(invalid_task)
+
+    assert not invalid_playbook.is_valid_runner()
+    errors = invalid_playbook.validate_runner()
+    assert len(errors) == 1
+    assert "Task '' is invalid for ansible_runner" in errors[0]
+
+
+@patch("ansible_runner.run")
+def test_playbook_run_with_runner(mock_run):
+    """Test that a Playbook can be run with ansible_runner."""
+    # Set up the mock
+    mock_result = MagicMock()
+    mock_result.rc = 0
+    mock_result.status = "successful"
+    mock_result.stdout = "Playbook ran successfully"
+    mock_result.stderr = ""
+    mock_result.events = [
+        {"event": "runner_on_ok", "event_data": {"changed": True}},
+        {"event": "runner_on_ok", "event_data": {"changed": False}},
+    ]
+    mock_result.stats = {"ok": 2, "changed": 1, "failures": 0}
+    mock_run.return_value = mock_result
+
+    # Create a playbook
+    playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+    )
+
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    playbook.add_task(task)
+
+    # Run the playbook
+    result = playbook.run_with_runner()
+
+    # Check that ansible_runner.run was called
+    mock_run.assert_called_once()
+
+    # Check the result
+    assert result.success is True
+    assert result.changed is True
+    assert result.error is None
+    assert result.output["rc"] == 0
+    assert result.output["status"] == "successful"
+    assert result.output["stdout"] == "Playbook ran successfully"
+    assert result.output["stderr"] == ""
+    assert len(result.output["events"]) == 2
+    assert result.output["stats"] == {"ok": 2, "changed": 1, "failures": 0}
+
+    # Test with invalid playbook
+    invalid_playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+    )
+
+    invalid_task = Task(
+        name="",  # Empty name is invalid
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    invalid_playbook.add_task(invalid_task)
+
+    # Run the invalid playbook
+    with pytest.raises(ValueError):
+        invalid_playbook.run_with_runner()
+
+
+@patch("ansible_runner.run")
+def test_run_playbook(mock_run):
+    """Test that a playbook can be run with the run_playbook function."""
+    # Set up the mock
+    mock_result = MagicMock()
+    mock_result.rc = 0
+    mock_result.status = "successful"
+    mock_result.stdout = "Playbook ran successfully"
+    mock_result.stderr = ""
+    mock_result.events = [
+        {"event": "runner_on_ok", "event_data": {"changed": True}},
+        {"event": "runner_on_ok", "event_data": {"changed": False}},
+    ]
+    mock_result.stats = {"ok": 2, "changed": 1, "failures": 0}
+    mock_run.return_value = mock_result
+
+    # Create a playbook
+    playbook = Playbook(
+        name="Setup Web Server",
+        hosts="web_servers",
+    )
+
+    task = Task(
+        name="Install nginx",
+        module="apt",
+        args={"name": "nginx", "state": "present"},
+    )
+
+    playbook.add_task(task)
+
+    # Run the playbook
+    result = run_playbook(playbook)
+
+    # Check that ansible_runner.run was called
+    mock_run.assert_called_once()
+
+    # Check the result
+    assert result.success is True
+    assert result.changed is True
+    assert result.error is None
+    assert result.output["rc"] == 0
+    assert result.output["status"] == "successful"
+    assert result.output["stdout"] == "Playbook ran successfully"
+    assert result.output["stderr"] == ""
+    assert len(result.output["events"]) == 2
+    assert result.output["stats"] == {"ok": 2, "changed": 1, "failures": 0}
+
+    # Reset the mock
+    mock_run.reset_mock()
+
+    # Test with a dictionary
+    playbook_dict = {
+        "name": "Setup Web Server",
+        "hosts": "web_servers",
+        "tasks": [
+            {
+                "name": "Install nginx",
+                "apt": {"name": "nginx", "state": "present"},
+            }
+        ]
+    }
+
+    # Run the playbook
+    result = run_playbook(playbook_dict)
+
+    # Check that ansible_runner.run was called
+    mock_run.assert_called_once()
+
+    # Check the result
+    assert result.success is True
+    assert result.changed is True
+    assert result.error is None
+
+    # Reset the mock
+    mock_run.reset_mock()
+
+    # Test with a file path
+    result = run_playbook("path/to/playbook.yml")
+
+    # Check that ansible_runner.run was called
+    mock_run.assert_called_once()
+
+    # Check the result
+    assert result.success is True
+    assert result.changed is True
+    assert result.error is None
+
+    # Test with an invalid type
+    with pytest.raises(TypeError):
+        run_playbook(123)
+
+
+@patch("ansible_runner.run")
+def test_run_playbook_with_runner(mock_run):
+    """Test that a playbook can be run with the run_playbook_with_runner function."""
+    # Set up the mock
+    mock_result = MagicMock()
+    mock_result.rc = 0
+    mock_result.status = "successful"
+    mock_result.stdout = "Playbook ran successfully"
+    mock_result.stderr = ""
+    mock_result.events = [
+        {"event": "runner_on_ok", "event_data": {"changed": True}},
+        {"event": "runner_on_ok", "event_data": {"changed": False}},
+    ]
+    mock_result.stats = {"ok": 2, "changed": 1, "failures": 0}
+    mock_run.return_value = mock_result
+
+    # Create a playbook dictionary
+    playbook_dict = {
+        "name": "Setup Web Server",
+        "hosts": "web_servers",
+        "tasks": [
+            {
+                "name": "Install nginx",
+                "apt": {"name": "nginx", "state": "present"},
+            }
+        ]
+    }
+
+    # Run the playbook
+    result = run_playbook_with_runner(playbook_dict)
+
+    # Check that ansible_runner.run was called
+    mock_run.assert_called_once()
+
+    # Check the result
+    assert result.success is True
+    assert result.changed is True
+    assert result.error is None
+    assert result.output["rc"] == 0
+    assert result.output["status"] == "successful"
+    assert result.output["stdout"] == "Playbook ran successfully"
+    assert result.output["stderr"] == ""
+    assert len(result.output["events"]) == 2
+    assert result.output["stats"] == {"ok": 2, "changed": 1, "failures": 0}
+
+    # Reset the mock
+    mock_run.reset_mock()
+
+    # Test with a YAML string
+    playbook_yaml = """
+    - name: Setup Web Server
+      hosts: web_servers
+      tasks:
+        - name: Install nginx
+          apt:
+            name: nginx
+            state: present
+    """
+
+    # Run the playbook
+    result = run_playbook_with_runner(playbook_yaml)
+
+    # Check that ansible_runner.run was called
+    mock_run.assert_called_once()
+
+    # Check the result
+    assert result.success is True
+    assert result.changed is True
+    assert result.error is None
+
+    # Test with an invalid type
+    with pytest.raises(TypeError):
+        run_playbook_with_runner(123)
