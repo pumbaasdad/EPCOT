@@ -57,10 +57,18 @@ def test_validate_figment_name_invalid() -> None:
         validate_figment_name("ReverseProxy")
 
 
-def test_to_pascal_case() -> None:
-    """Test converting a kabab-case string to PascalCase."""
+def test_to_pascal_case_with_hyphens() -> None:
+    """Test converting a kabab-case string with hyphens to PascalCase."""
     assert to_pascal_case("reverse-proxy") == "ReverseProxy"
+
+
+def test_to_pascal_case_single_word() -> None:
+    """Test converting a single word kabab-case string to PascalCase."""
     assert to_pascal_case("backup") == "Backup"
+
+
+def test_to_pascal_case_multiple_hyphens() -> None:
+    """Test converting a kabab-case string with multiple hyphens to PascalCase."""
     assert to_pascal_case("media-server-config") == "MediaServerConfig"
 
 
@@ -75,14 +83,24 @@ class NotAFigment:
 
 
 @patch("importlib.import_module")
-def test_get_figment_class_success(mock_import: MagicMock) -> None:
-    """Test getting a figment class successfully."""
+def test_get_figment_class_returns_correct_class(mock_import: MagicMock) -> None:
+    """Test getting a figment class returns the correct class."""
     mock_module = MagicMock()
     mock_module.TestFigment = MockFigment
     mock_import.return_value = mock_module
 
     figment_class = get_figment_class("test-figment")
     assert figment_class == MockFigment
+
+
+@patch("importlib.import_module")
+def test_get_figment_class_imports_correct_module(mock_import: MagicMock) -> None:
+    """Test getting a figment class imports the correct module."""
+    mock_module = MagicMock()
+    mock_module.TestFigment = MockFigment
+    mock_import.return_value = mock_module
+
+    get_figment_class("test-figment")
     mock_import.assert_called_once_with("epcot.figments.test_figment")
 
 
@@ -136,10 +154,10 @@ def config_file() -> Generator[Path, None, None]:
 
 @patch("epcot.cli.get_figment_class")
 @patch("epcot.cli.Path")
-def test_main_success(
+def test_main_success_returns_zero(
     mock_path: MagicMock, mock_get_class: MagicMock, config_file: Path
 ) -> None:
-    """Test the main function with a successful execution."""
+    """Test the main function with a successful execution returns 0."""
     mock_path.return_value = config_file
     mock_figment = MagicMock()
     mock_figment_class = MagicMock(return_value=mock_figment)
@@ -148,6 +166,21 @@ def test_main_success(
     result = main()
 
     assert result == 0
+
+
+@patch("epcot.cli.get_figment_class")
+@patch("epcot.cli.Path")
+def test_main_success_calls_get_figment_class(
+    mock_path: MagicMock, mock_get_class: MagicMock, config_file: Path
+) -> None:
+    """Test the main function calls get_figment_class for each figment."""
+    mock_path.return_value = config_file
+    mock_figment = MagicMock()
+    mock_figment_class = MagicMock(return_value=mock_figment)
+    mock_get_class.return_value = mock_figment_class
+
+    main()
+
     assert mock_get_class.call_count == 3
 
 
