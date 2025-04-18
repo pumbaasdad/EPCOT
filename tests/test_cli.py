@@ -67,10 +67,6 @@ def test_to_pascal_case() -> None:
 class MockFigment(Figment):
     """Mock figment class for testing."""
 
-    def run(self) -> None:
-        """Run the figment."""
-        pass
-
 
 class NotAFigment:
     """Class that does not inherit from Figment."""
@@ -153,7 +149,6 @@ def test_main_success(
 
     assert result == 0
     assert mock_get_class.call_count == 3
-    assert mock_figment.run.call_count == 3
 
 
 @patch("epcot.cli.Path")

@@ -130,8 +130,7 @@ def main() -> int:
                 figment_config = cast(Dict[str, Any], item[name])
 
             figment_class = get_figment_class(name)
-            figment = figment_class(figment_config)
-            figment.run()
+            _ = figment_class(figment_config)
 
         return 0
 
