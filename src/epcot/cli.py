@@ -117,7 +117,7 @@ def main() -> int:
 
         if "figments" not in config:
             print("No figments found in configuration")
-            return 0
+            return 1
 
         figments_list = validate_figments_list(config["figments"])
 

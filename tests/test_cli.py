@@ -165,7 +165,7 @@ def test_main_no_figments(mock_path: MagicMock, config_file: Path) -> None:
 
     result = main()
 
-    assert result == 0
+    assert result == 1
 
 
 @patch("epcot.cli.Path")
