@@ -6,8 +6,6 @@ directories:
 files:
   - src: roles/dhcp/templates/dhcpd.conf.j2
     dest: "{{ $INPUT.root_directory }}/dhcpd.conf"
-  - src: roles/dhcp/templates/Dockerfile
-    dest: "{{ dockerfile_dir }}/{{ dhcp_service_name }}.Dockerfile"
 
 docker:
   services:
