@@ -11,55 +11,11 @@ from typing import Dict, Any, List, Optional
 
 from adk.task import Task
 from epcot.config import get_figment_config
+from epcot.directory import Directory
+from epcot.group import Group
+from epcot.pip_module import PipModule
+from epcot.service import Service
 from epcot.utils import pascal_to_kebab
-
-
-class Directory:
-    """Directory configuration for a figment."""
-
-    def __init__(self, config: Dict[str, Any]) -> None:
-        """Initialize a directory.
-
-        Args:
-            config: Configuration for the directory.
-        """
-        self.config = config
-
-
-class Service:
-    """Service configuration for a figment."""
-
-    def __init__(self, config: Dict[str, Any]) -> None:
-        """Initialize a service.
-
-        Args:
-            config: Configuration for the service.
-        """
-        self.config = config
-
-
-class PipModule:
-    """Pip module configuration for a figment."""
-
-    def __init__(self, config: Dict[str, Any]) -> None:
-        """Initialize a pip module.
-
-        Args:
-            config: Configuration for the pip module.
-        """
-        self.config = config
-
-
-class Group:
-    """Group configuration for a figment."""
-
-    def __init__(self, config: Dict[str, Any]) -> None:
-        """Initialize a group.
-
-        Args:
-            config: Configuration for the group.
-        """
-        self.config = config
 
 
 class Figment(ABC):
