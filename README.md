@@ -78,6 +78,38 @@ cd docs
 sphinx-build -b html source build/html
 ```
 
+## Usage
+
+To run EPCOT from the command line:
+
+```bash
+# Make sure you've installed the package using Poetry
+poetry install
+
+# Activate the Poetry virtual environment
+poetry shell
+
+# Run the EPCOT command
+epcot
+```
+
+The `epcot` command will:
+1. Look for an `epcot.yaml` file in the current directory
+2. Load and validate the figments defined in the configuration
+3. Instantiate each figment class
+
+Make sure your `epcot.yaml` file is properly configured with a list of figments:
+
+```yaml
+figments:
+  - backup
+  - certificates
+  - dhcp
+  # ... other figments
+  - reverse-proxy:
+      certificate_volume_name: "{{ $certificates.PROVIDES.certificate_volume }}"
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
